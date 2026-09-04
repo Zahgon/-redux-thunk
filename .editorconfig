@@ -6,16 +6,14 @@
 root = true
 
 # Use bracketed regexp to target specific file types or file locations
-[*.{js,json}]
+[*.go]
 
 # Use hard or soft tabs ["tab", "space"]
-indent_style = space
-
-# Size of a single indent [an integer, "tab"]
-indent_size = tab
+# gofmt indents with tabs; this is not configurable.
+indent_style = tab
 
 # Number of columns representing a tab character [an integer]
-tab_width = 2
+tab_width = 4
 
 # Line breaks representation ["lf", "cr", "crlf"]
 end_of_line = lf
@@ -29,8 +27,26 @@ trim_trailing_whitespace = true
 # Ensure file ends with a newline when saving ["true", "false"]
 insert_final_newline = true
 
+[*.{yml,yaml,json,sh}]
+
+indent_style = space
+indent_size = 2
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+
+# Makefiles require tabs for recipe lines.
+[Makefile]
+
+indent_style = tab
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+
 # Markdown files
 [*.md]
 
 # Trailing whitespaces are significant in Markdown.
 trim_trailing_whitespace = false
+insert_final_newline = true

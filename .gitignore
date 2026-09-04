@@ -1,23 +1,21 @@
-node_modules
-coverage
+# Build output. Go builds to the module root by default.
+/redux-thunk-go
+/bin/
+/dist/
+/examples/consumer/redux-thunk-go-consumer
+
+# Test and coverage artifacts
+coverage.out
+coverage.html
+*.test
 *.log
-lib
-dist
-es
-builds/
 
-typesversions
-.cache
-.yarnrc
-.yarn/*
-!.yarn/patches
-!.yarn/releases
-!.yarn/plugins
-!.yarn/sdks
-!.yarn/versions
-.pnp.*
-*.tgz
+# Scratch directories created by the type-error suite if a run is interrupted
+typeerrors-scratch-*
 
-tsconfig.vitest-temp.json
-
+# Editors
 .vscode
+.idea
+
+# macOS
+.DS_Store

@@ -1,0 +1,54 @@
+# Translation of the upstream .eslintrc and .prettierrc.json.
+#
+# The upstream ESLint config is minimal: the TypeScript recommended set with a
+# handful of rules turned off. This config keeps the same spirit -- catch real
+# defects, do not police style that gofmt already fixes.
+
+version: "2"
+
+run:
+  tests: true
+
+linters:
+  default: standard
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - bodyclose
+    - copyloopvar
+    - errorlint
+    - misspell
+    - nolintlint
+    - revive
+    - unconvert
+    - wastedassign
+
+  settings:
+    revive:
+      rules:
+        - name: exported
+          # Every exported symbol in this port carries a doc comment that ties
+          # it to the TypeScript original. Keep it that way.
+          severity: error
+
+  exclusions:
+    rules:
+      # The type-error fixtures are deliberately uncompilable.
+      - path: testdata/typeerrors/
+        linters:
+          - typecheck
+          - unused
+          - revive
+
+      # Ported tests mirror the upstream fixtures, which ignore return values
+      # the same way.
+      - path: _test\.go$
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt

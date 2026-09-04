@@ -1,231 +1,121 @@
+# Translation of the upstream CI workflow. See docs/MIGRATION.md §7 for the
+# job-by-job mapping; `are-the-types-wrong` has no Go counterpart because there
+# is no dual ESM/CJS packaging problem to detect.
+
 name: CI
 
 on: [push, pull_request, workflow_dispatch]
 
+permissions:
+  contents: read
+
 jobs:
   build:
-    name: Lint, Test, Build & Pack on Node ${{ matrix.node }}
+    name: Lint, Test & Build on Go ${{ matrix.go }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: ['22.x']
+        go: ['1.24.x']
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Use Node ${{ matrix.node }}
-        uses: actions/setup-node@v4
+      - name: Use Go ${{ matrix.go }}
+        uses: actions/setup-go@v5
         with:
-          node-version: ${{ matrix.node }}
-          cache: 'yarn'
-
-      - name: Install deps
-        run: yarn install
+          go-version: ${{ matrix.go }}
 
       # Read existing version, reuse that, add a Git short hash
       - name: Set build version to Git commit
-        run: yarn tsx scripts/writeGitVersion.mts $(git rev-parse --short HEAD)
-
-      - name: Check updated version
-        run: jq .version package.json
+        run: ./scripts/version.sh $(git rev-parse --short HEAD)
 
       - name: Run linter
-        run: yarn lint
+        run: make lint
 
-      - name: Pack
-        run: yarn pack
+      - name: Build
+        run: make build
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: package
-          path: ./package.tgz
+      - name: Test
+        run: make test
 
-  test-dist:
-    name: Test against dist
-    needs: [build]
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node: ['22.x']
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Use node ${{ matrix.node }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node }}
-          cache: 'yarn'
-
-      - name: Install deps
-        run: yarn install
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: package
-          path: .
-
-      - run: ls -lah
-
-      - name: Install build artifact
-        run: yarn add ./package.tgz
-
-      - name: Erase path aliases
-        run: sed -i -e /@remap-prod-remove-line/d ./tsconfig.base.json
-
-      - name: Run tests, against dist
-        env:
-          TEST_DIST: true
-        run: yarn test
-
-  test-types:
-    name: Test Types with TypeScript ${{ matrix.ts }}
+  test-versions:
+    name: Test with Go ${{ matrix.go }}
     needs: [build]
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        node: ['22.x']
-        ts: ['5.0', '5.1', '5.2', '5.3', '5.4', '5.5', '5.6', '5.7', '5.8']
+        # The upstream matrix spans every TypeScript release the package
+        # supports. The Go analogue is every Go toolchain at or above the
+        # version declared in go.mod.
+        go: ['1.22.x', '1.23.x', '1.24.x']
 
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Use node ${{ matrix.node }}
-        uses: actions/setup-node@v4
+      - name: Use Go ${{ matrix.go }}
+        uses: actions/setup-go@v5
         with:
-          node-version: ${{ matrix.node }}
-          cache: 'yarn'
+          go-version: ${{ matrix.go }}
 
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
+      - name: Show toolchain version
+        run: go version
+
+      - name: Test
+        run: go test -race ./...
+
+  test-consumer:
+    name: Test External Consumer on ${{ matrix.os }}
+    needs: [build]
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        # The upstream matrix builds the packed artifact into eight app
+        # templates. The one meaningful Go analogue is building the library
+        # from a separate module; the axis that actually varies is the OS.
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Use Go
+        uses: actions/setup-go@v5
         with:
-          name: package
-          path: .
+          go-version: '1.24.x'
 
-      - name: Install deps
-        run: yarn install
+      - name: Build the consumer module
+        working-directory: ./examples/consumer
+        run: go build ./...
 
-      - name: Install TypeScript ${{ matrix.ts }}
-        run: yarn add typescript@${{ matrix.ts }}
+      - name: Test the consumer module
+        working-directory: ./examples/consumer
+        run: go test ./...
 
-      - name: Install build artifact
-        run: yarn add ./package.tgz
+  vet-examples:
+    name: Vet and run the ported README examples
+    needs: [build]
+    runs-on: ubuntu-latest
 
-      - name: Erase path aliases
-        run: sed -i -e /@remap-prod-remove-line/d ./tsconfig.base.json
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - name: Test types
-        env:
-          TEST_DIST: true
+      - name: Use Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.x'
+
+      - name: Vet
+        run: go vet ./examples/...
+
+      - name: Run the examples
         run: |
-          yarn tsc --version
-          yarn type-tests
-
-  test-published-artifact:
-    name: Test Published Artifact ${{ matrix.example }}
-
-    needs: [build]
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node: ['22.x']
-        example:
-          [
-            'cra4',
-            'cra5',
-            'next',
-            'vite',
-            'node-standard',
-            'node-esm',
-            'react-native',
-            'expo',
-          ]
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Use node ${{ matrix.node }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node }}
-          cache: 'yarn'
-
-      - name: Clone RTK repo
-        run: git clone https://github.com/reduxjs/redux-toolkit.git ./redux-toolkit
-
-      - name: Cache example deps
-        uses: actions/cache@v4
-        with:
-          path: ./redux-toolkit/examples/publish-ci/${{ matrix.example }}/node_modules
-          key: test-published-artifact-${{ matrix.example }}-node_modules
-
-      - name: Check folder contents
-        run: ls -l .
-
-      - name: Install deps
-        working-directory: ./redux-toolkit/examples/publish-ci/${{ matrix.example }}
-        env:
-          YARN_ENABLE_IMMUTABLE_INSTALLS: false
-        run: yarn install
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: package
-          path: ./redux-toolkit/examples/publish-ci/${{ matrix.example }}
-
-      - name: Check folder contents
-        working-directory: ./redux-toolkit/examples/publish-ci/${{ matrix.example }}
-        run: ls -l .
-
-      - name: Install Redux-Thunk build artifact
-        working-directory: ./redux-toolkit/examples/publish-ci/${{ matrix.example }}
-        run: yarn add ./package.tgz
-
-      - name: Show installed package versions
-        working-directory: ./redux-toolkit/examples/publish-ci/${{ matrix.example }}
-        run: yarn info redux-thunk && yarn why redux-thunk
-
-      - name: Build example
-        working-directory: ./redux-toolkit/examples/publish-ci/${{ matrix.example }}
-        env:
-          NODE_OPTIONS: --openssl-legacy-provider
-        run: yarn build
-
-      - name: Run test step
-        working-directory: ./redux-toolkit/examples/publish-ci/${{ matrix.example }}
-        run: yarn test
-
-  are-the-types-wrong:
-    name: Check package config with are-the-types-wrong
-
-    needs: [build]
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node: ['22.x']
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Use node ${{ matrix.node }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node }}
-          cache: 'yarn'
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: package
-          path: .
-
-      # Note: We currently expect "FalseCJS" failures for Node16 + `moduleResolution: "node16"
-      - name: Run are-the-types-wrong
-        run: npx @arethetypeswrong/cli ./package.tgz --format table --ignore-rules false-cjs
+          go run ./examples/counter
+          go run ./examples/extraargument
+          go run ./examples/sandwich
